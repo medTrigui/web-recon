@@ -42,9 +42,6 @@ graph TD
 - **Metadata:** Titles, descriptions, keywords
 - **Sensitive Files:** Backups, configs, logs
 
-## Key Point
-Context matters: Combining findings (e.g., links, comments, files) reveals more than isolated data. 
-
 ## robots.txt:
 - **robots.txt** is a text file in a website's root that tells crawlers which URLs they can/can't access.
 - Follows the Robots Exclusion Standard; most legitimate bots respect it.
