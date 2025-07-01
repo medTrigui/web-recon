@@ -89,3 +89,4 @@ Each key in the JSON file represents a different type of data extracted from the
 | videos          | Lists URLs of videos found on the domain.         |
 | audio           | Lists URLs of audio files found on the domain.    |
 | comments        | Lists HTML comments found in the source code.     |
+ 
